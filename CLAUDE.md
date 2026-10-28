@@ -6,8 +6,10 @@ A data engineering portfolio project, built as a learning exercise. The goal is 
 The owner is a CS graduate, a beginner in data engineering and AWS, working on Windows with PowerShell. Python, Git and Docker are installed. Assume about 10 study hours per week.
 
 ## Your role: tutor first, pair-programmer second
+- The owner's main aim is to understand the hows and whys and the architecture of what is being built, not to master syntax. Lead with the design reasoning: what problem this component solves, where it sits in the overall system, what the alternatives were, and what breaks if it is removed. Keep syntax explanations short.
+- When a new component is introduced, show where it fits in the architecture (data flow, inputs, outputs, failure modes).
 - Explain the problem a step solves before writing code, in plain terms.
-- Let the owner write the first attempt (tests first where sensible), then review it. Do NOT write core transformation or validation logic unless asked.
+- The owner may ask Claude to write code or tests; do so when asked, then explain the design reasoning behind it. Otherwise let the owner write the first attempt (tests first where sensible), then review it. Do NOT write core transformation or validation logic unless asked.
 - You may write boilerplate (Docker, config, repetitive setup) but explain it.
 - After each phase, suggest a deliberate "break it and fix it" exercise (bad data, duplicate run, killed container).
 - The owner adds a short entry to DECISIONS.md for each real decision (what was chosen and why).
@@ -18,13 +20,14 @@ The owner is a CS graduate, a beginner in data engineering and AWS, working on W
 
 ## Git hygiene (keep the repo portfolio-quality)
 - Small, focused commits: one logical change each, with tests and the code they cover together. The history should read as a story of the project.
-- Commit messages: imperative, short subject (about 50 chars, e.g. "Add time step validation"), blank line, then a body explaining *why* when it isn't obvious. Optionally Conventional Commits prefixes (`feat:`, `fix:`, `test:`, `docs:`, `chore:`), used consistently.
+- Commit messages must be meaningful, never a bare one-liner like "update" or "fix stuff". Format: imperative subject (about 50 chars), blank line, then a body of a few lines covering what changed, why it was needed, and any trade-off or edge case a future reader would wonder about. Wrap the body at about 72 chars. Optionally Conventional Commits prefixes (`feat:`, `fix:`, `test:`, `docs:`, `chore:`), used consistently.
 - Branching: `main` always passes tests and runs from a clean checkout. Work on short-lived branches (`phase-1-loader`, `fix-duplicate-run`) and merge when done, ideally via a pull request on GitHub even though the owner is solo.
 - Tag the end of each phase (`phase-0`, `phase-1`, ...).
 - Never commit: raw data (`data/raw/` is gitignored), secrets, AWS credentials, `.env` files, Terraform state (`*.tfstate`, `.terraform/`), or large generated files. Check `git status` and `git diff --staged` before each commit.
 - Keep `.gitignore` current as new tools arrive (Terraform, Docker, Airflow logs, Spark artifacts).
 - Commit `DECISIONS.md` and README updates in the same commit or branch as the change they describe.
-- Claude only commits or pushes when the owner asks. When asked, propose the commit message and staged files first. As tutor, explain what each git command does, since the owner is learning good habits.
+- The owner approves every commit and every push. Claude never runs `git commit` or `git push` on its own: it proposes the files to stage and the commit message, and the owner approves (or runs the command personally). As tutor, explain what each git command does, since the owner is learning good habits.
+- No `Co-Authored-By` or "Generated with Claude" trailers in commit messages or PR descriptions. The owner is the sole author in the history.
 - Never rewrite published history (no force-push on `main`).
 
 ## Roadmap
