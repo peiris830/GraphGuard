@@ -21,8 +21,8 @@ The owner is a CS graduate, a beginner in data engineering and AWS, working on W
 ## Git hygiene (keep the repo portfolio-quality)
 - Small, focused commits: one logical change each, with tests and the code they cover together. The history should read as a story of the project.
 - Commit messages must be meaningful, never a bare one-liner like "update" or "fix stuff". Format: imperative subject (about 50 chars), blank line, then a body of a few lines covering what changed, why it was needed, and any trade-off or edge case a future reader would wonder about. Wrap the body at about 72 chars. Optionally Conventional Commits prefixes (`feat:`, `fix:`, `test:`, `docs:`, `chore:`), used consistently.
-- Branching: `main` always passes tests and runs from a clean checkout. Work on short-lived branches (`phase-1-loader`, `fix-duplicate-run`) and merge when done, ideally via a pull request on GitHub even though the owner is solo.
-- Tag the end of each phase (`phase-0`, `phase-1`, ...).
+- Branching: `main` always passes tests and runs from a clean checkout. Work on short-lived branches named `type/short-description` (`feat/csv-loader`, `fix/duplicate-rows-on-rerun`, `docs/readme`), not by phase number, and merge when done, ideally via a pull request on GitHub even though the owner is solo.
+- Tag the end of each phase with an annotated tag named `vMAJOR.MINOR.PATCH-short-description` (`v0.1.0-foundation`, `v0.2.0-local-batch-pipeline`, `v0.3.0-spark-transforms`, `v0.4.0-cloud-infrastructure`, `v0.5.0-airflow-orchestration`, `v0.6.0-kafka-streaming`, `v0.7.0-serving-and-drift`, `v1.0.0-core-release`). Fixes after a tag bump the patch number. Tag only merged commits on `main` whose tests pass, give each tag a message saying what shipped, and never move or delete a pushed tag. Milestones only, not every commit.
 - Never commit: raw data (`data/raw/` is gitignored), secrets, AWS credentials, `.env` files, Terraform state (`*.tfstate`, `.terraform/`), or large generated files. Check `git status` and `git diff --staged` before each commit.
 - Keep `.gitignore` current as new tools arrive (Terraform, Docker, Airflow logs, Spark artifacts).
 - Commit `DECISIONS.md` and README updates in the same commit or branch as the change they describe.
@@ -79,7 +79,8 @@ graphguard/
 Install with: `pip install -e ".[dev]"` inside an activated .venv.
 
 ## Current status (update this at the end of each session)
-- Phase 0 in progress. Skeleton and config files have been given; owner may not have finished them yet, so check the repo state first.
-- Owner's first task: write tests, then `is_valid_time_step(step) -> bool` in src/graphguard/validation.py. Valid steps are integers 1-49. The owner decides edge cases (0, 50, -3, 7.0, "7", True) and records the reasoning in DECISIONS.md.
-- Still to do: download the Elliptic dataset from Kaggle into data/raw/, `git init` and make the first commit (see Git hygiene; consider a GitHub remote). Python 3.12.4 venv confirmed.
-- Next after Phase 0: Phase 1, loading the Elliptic CSVs, validating, writing Parquet, querying with DuckDB.
+- Phase 0 is done apart from a fuller README and the phase tag. The repo is on GitHub (peiris830/GraphGuard); PR #1 (time step validation) is merged. Python 3.12.4 venv; pip needs `--use-feature=truststore` on this machine because of an HTTPS certificate interception issue.
+- Phase 1 in progress on branch `feat/csv-loader` (PR not yet opened or merged). Done: `is_valid_time_step` in validation.py, `read_features` in loader.py, 28 passing tests, DECISIONS.md entries for validation, src layout, pandas and explicit columns.
+- Dataset is in `data/raw/elliptic_bitcoin_dataset/` (one folder deeper than the skeleton shows). Facts found: features file has no header, 203,769 rows, 167 columns (tx_id, time_step, 165 features), time steps 1-49 with no gaps, no duplicate tx_ids, no nulls. Classes: 4,545 illicit (1), 42,019 licit (2), 157,205 `unknown`. Edgelist: 234,355 edges.
+- Agreed Phase 1 design: rows that fail validation go to a quarantine file with a reason, and the run fails only if rejects exceed a threshold (about 1%); `unknown` class becomes null with the original value kept; output is Parquet partitioned by time step in gitignored `data/processed/`; check that every edge `txId` exists in the features file.
+- Next: classes reader, edges reader, row-level validation with quarantine, partitioned Parquet output, cross-file integrity check, DuckDB queries, then a "break it and fix it" exercise (bad time step, running twice, edge to a missing txId, truncated file). Each piece is its own small commit, with the DECISIONS.md entry alongside.

@@ -76,3 +76,23 @@ One short entry per real decision: what was chosen and why.
 - **Trade-off:** The first-row check only samples one row, so it catches a wrong
   schema but not a single malformed row deep in the file. Row-level problems are the
   job of the validation and quarantine stage.
+
+### 2026-10-29: Turn the `unknown` class into a null and keep the raw value
+- **Decision:** `read_classes` returns three columns: `tx_id`, `class_raw` (the original
+  text: `1`, `2` or `unknown`) and `label` (a nullable `Int64`, where `unknown` becomes
+  a real null). Any other class value stops the load with a `ValueError`.
+- **Why:** 157,205 of 203,769 transactions (77%) are `unknown`, meaning "not labelled",
+  which is exactly what a null means. As text, the column would mix numbers and a word,
+  so every query would have to remember that `"unknown"` is not a label, and numeric
+  filters would quietly misbehave. A null is handled correctly by DuckDB, pandas and
+  Spark. The raw column stays so nothing is lost and any null can be traced to its source.
+  `Int64` (not `int64`) is needed because a plain integer column cannot hold nulls, and
+  pandas would silently turn 1 and 2 into 1.0 and 2.0.
+- **Alternatives considered:** Keeping the string `unknown` (faithful to the file, but
+  the column stays mixed-type). Splitting into a labelled and an unlabelled table
+  (convenient for modelling, but it duplicates structure and loses the full picture in
+  one place). Dropping unknown rows (they are 77% of the data, and the graph needs them
+  as neighbours of labelled nodes).
+- **Trade-off:** The strict `ValueError` stops the whole load on one bad value, which
+  fits the real file (it passes cleanly). Collecting bad rows and continuing is the job
+  of the later validation and quarantine stage, so this reader stays simple.
