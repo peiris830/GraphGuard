@@ -55,3 +55,27 @@ def read_classes(path: Path) -> pd.DataFrame:
         )
     df["label"] = df["class_raw"].map(CLASS_TO_LABEL).astype("Int64")
     return df
+
+
+EDGE_COLUMNS = ["src_tx_id", "dst_tx_id"]
+
+
+def read_edges(path: Path) -> pd.DataFrame:
+    """Read elliptic_txs_edgelist.csv into src_tx_id and dst_tx_id.
+
+    Each row is a directed edge from the source transaction to the one it
+    funds. Whether both ends exist in the features file is checked
+    separately, since that needs two files.
+    """
+    first_row = pd.read_csv(path, nrows=1)
+    if first_row.shape[1] != len(EDGE_COLUMNS):
+        raise ValueError(
+            f"expected {len(EDGE_COLUMNS)} columns in {path}, "
+            f"found {first_row.shape[1]}"
+        )
+    df = pd.read_csv(path, header=0, names=EDGE_COLUMNS)
+    # A blank endpoint makes pandas read the whole column as floats with NaN,
+    # which would then compare unequal to every integer tx_id downstream.
+    if df.isna().any().any():
+        raise ValueError(f"missing transaction ids in {path}")
+    return df.astype("int64")
