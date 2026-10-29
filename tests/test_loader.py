@@ -1,6 +1,6 @@
 import pytest
 
-from graphguard.loader import FEATURE_COLUMNS, read_classes, read_features
+from graphguard.loader import FEATURE_COLUMNS, read_classes, read_edges, read_features
 
 
 def write_features_csv(path, rows):
@@ -100,3 +100,46 @@ def test_classes_wrong_column_count_raises(tmp_path):
 
     with pytest.raises(ValueError, match="2"):
         read_classes(csv)
+
+
+def write_edges_csv(path, rows):
+    lines = ["txId1,txId2"] + [f"{src},{dst}" for src, dst in rows]
+    path.write_text("\n".join(lines) + "\n")
+
+
+def test_edges_use_directional_column_names(tmp_path):
+    csv = tmp_path / "edges.csv"
+    write_edges_csv(csv, [(111, 222), (222, 333)])
+
+    df = read_edges(csv)
+
+    assert df.columns.tolist() == ["src_tx_id", "dst_tx_id"]
+    assert df["src_tx_id"].tolist() == [111, 222]
+    assert df["dst_tx_id"].tolist() == [222, 333]
+
+
+def test_edge_ids_are_integers(tmp_path):
+    csv = tmp_path / "edges.csv"
+    write_edges_csv(csv, [(111, 222)])
+
+    df = read_edges(csv)
+
+    assert df["src_tx_id"].dtype == "int64"
+    assert df["dst_tx_id"].dtype == "int64"
+
+
+def test_edges_wrong_column_count_raises(tmp_path):
+    csv = tmp_path / "edges.csv"
+    csv.write_text("txId1,txId2,weight\n111,222,0.5\n")
+
+    with pytest.raises(ValueError, match="2"):
+        read_edges(csv)
+
+
+def test_edges_with_missing_ids_raise(tmp_path):
+    # A blank endpoint would make pandas turn the whole column into floats.
+    csv = tmp_path / "edges.csv"
+    csv.write_text("txId1,txId2\n111,222\n333,\n")
+
+    with pytest.raises(ValueError, match="missing"):
+        read_edges(csv)

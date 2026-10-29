@@ -96,3 +96,27 @@ One short entry per real decision: what was chosen and why.
 - **Trade-off:** The strict `ValueError` stops the whole load on one bad value, which
   fits the real file (it passes cleanly). Collecting bad rows and continuing is the job
   of the later validation and quarantine stage, so this reader stays simple.
+
+### 2026-10-29: Check cross-file integrity in a separate module that returns the bad rows
+- **Decision:** Four table-level checks live in `integrity.py`, apart from the readers:
+  orphan edges, edges that cross time steps, class ids that do not match feature ids,
+  and duplicate `tx_id`s. Each returns the offending rows (empty means it passed), and
+  each problem is reported by exactly one check.
+- **Why:** A reader looks at one file, but these questions need two. An edge pointing at
+  a transaction that is not in the features file would be dropped silently by a join and
+  leave every degree count too low. An edge crossing time steps would break the plan to
+  process one step at a time. Returning rows, not a yes or no, lets the later quarantine
+  stage isolate and report exactly what failed. Orphan edges are skipped by the
+  cross-step check, since their step is unknown, so one bad edge is not counted twice
+  when the pipeline fails on a reject threshold.
+- **What the real data showed:** All four checks pass. There are 234,355 edges, none
+  orphaned, none duplicated, no self-loops, and none crossing time steps, so every time
+  step is a self-contained graph (1,168 to 9,164 edges each). Phase 2 relies on that.
+  The classes file has exactly the same transaction ids as the features file.
+- **Alternatives considered:** Putting the checks inside each reader (simpler call sites,
+  but a reader would need to load other files, which makes it hard to test with small
+  fixtures). Returning a boolean (less code, but the caller would have to re-find the
+  bad rows to quarantine them).
+- **Trade-off:** The checks compare whole tables in memory, which is fine at 200k rows
+  (0.1 s here) and is another reason Phase 2 moves heavy joins to Spark. They only prove
+  the current files are clean, so they must be re-run on any new data version.
