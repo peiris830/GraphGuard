@@ -120,3 +120,29 @@ One short entry per real decision: what was chosen and why.
 - **Trade-off:** The checks compare whole tables in memory, which is fine at 200k rows
   (0.1 s here) and is another reason Phase 2 moves heavy joins to Spark. They only prove
   the current files are clean, so they must be re-run on any new data version.
+
+### 2026-10-29: Quarantine bad rows and stop the run only above a reject threshold
+- **Decision:** `split_valid_rows` splits the features table into clean rows and rejected
+  rows (each with a `reason`). If the rejected share is above 1% of all rows, it raises a
+  `ValueError` and the run stops. The limit is a parameter, and exactly 1% is allowed.
+- **Why:** The readers catch a wrongly shaped file, but one bad row inside a good file
+  needs a different answer. Stopping on the first bad row would throw away 200k good
+  rows over one, and dropping it silently would hide that the data is dirty. Isolating
+  the row with its reason keeps the good data moving and leaves a record to inspect. The
+  limit exists because a large share of bad rows usually means something upstream broke,
+  such as a shifted column or the wrong file, and loading the rest would hide that.
+- **Why 1%:** It is a starting value, not a measured one. The real files have zero
+  rejected rows, so there is nothing to tune it against. It is a parameter so tests can
+  exercise both sides, and so Airflow can set it per run in Phase 4.
+- **Alternatives considered:** Fail on the first bad row (strictest, but one bad row
+  blocks everything). Drop silently (never stops, but nobody finds out the data was
+  dirty). Quarantine with no limit (never blocks, but would happily load a file where
+  half the rows are wrong).
+- **Trade-off:** One reason is recorded per rejected row. That is enough while time step
+  is the only rule, and a list of reasons can come when more row-level rules exist. The
+  function returns the rejected rows and does not write them anywhere; writing the
+  quarantine file belongs to the Parquet writer.
+- **Gotcha found while building it:** `is_valid_time_step` rejects NumPy integers
+  (`np.int64` is not a Python `int`). `Series.map` passes plain ints, so the quarantine
+  step is safe, but looping over the NumPy array would reject every row. A test guards
+  this, and hardening the validator is tracked as a separate change.
