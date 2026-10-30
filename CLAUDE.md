@@ -55,7 +55,7 @@ Stopping after Phase 4 is already a solid portfolio piece; Phase 5 makes it stan
 - About 200k transactions across 49 time steps (numbered 1-49), graph-shaped and messy
 - Files: elliptic_txs_features.csv, elliptic_txs_classes.csv, elliptic_txs_edgelist.csv
 - Known real-world drift: model performance collapses after time step 43
-- Stored in data/raw/ and gitignored
+- Stored in data/raw/elliptic_bitcoin_dataset/ and gitignored
 
 ## Project 2 notes (later)
 Neo4j for multi-hop queries; spectral graph features first, a GNN only after a baseline exists; scoring engine = testable multi-hop mixing-pattern logic (not CRUD); FastAPI backend (Spring Boot only if the owner wants Java); React UI; Gephi export small and last; live blockchain ingestion optional and last.
@@ -68,19 +68,28 @@ Neo4j for multi-hop queries; spectral graph features first, a GNN only after a b
 ## Repo skeleton
 ```
 graphguard/
-├── data/raw/            # Elliptic CSVs (gitignored)
-├── src/graphguard/      # pipeline code
+├── data/raw/            # Elliptic CSVs in elliptic_bitcoin_dataset/ (gitignored)
+├── data/processed/      # pipeline output (gitignored)
+├── src/graphguard/      # loader, validation, integrity, quarantine, writer, pipeline
 ├── tests/
-├── pyproject.toml       # setuptools, src layout, dev extra with pytest, requires-python >=3.11
+├── docs/                # data.md, architecture.md
+├── pyproject.toml       # setuptools, src layout, deps pandas + pyarrow, dev extra with pytest, requires-python >=3.11
 ├── DECISIONS.md
+├── LICENSE              # MIT
 └── README.md
 ```
-.gitignore: .venv/, __pycache__/, *.pyc, .pytest_cache/, *.egg-info/, data/raw/
-Install with: `pip install -e ".[dev]"` inside an activated .venv.
+.gitignore: .venv/, __pycache__/, *.pyc, .pytest_cache/, *.egg-info/, data/raw/, data/processed/
+Install with: `pip install -e ".[dev]"` inside an activated .venv (add `--use-feature=truststore` on this machine; see README troubleshooting).
+Run the pipeline: `python -m graphguard.pipeline`. Run tests: `pytest`.
 
 ## Current status (update this at the end of each session)
-- Phase 0 is done apart from a fuller README and the phase tag. The repo is on GitHub (peiris830/GraphGuard); PR #1 (time step validation) is merged. Python 3.12.4 venv; pip needs `--use-feature=truststore` on this machine because of an HTTPS certificate interception issue.
-- Phase 1 in progress on branch `feat/csv-loader` (PR not yet opened or merged). Done: `is_valid_time_step` in validation.py, `read_features` in loader.py, 28 passing tests, DECISIONS.md entries for validation, src layout, pandas and explicit columns.
-- Dataset is in `data/raw/elliptic_bitcoin_dataset/` (one folder deeper than the skeleton shows). Facts found: features file has no header, 203,769 rows, 167 columns (tx_id, time_step, 165 features), time steps 1-49 with no gaps, no duplicate tx_ids, no nulls. Classes: 4,545 illicit (1), 42,019 licit (2), 157,205 `unknown`. Edgelist: 234,355 edges.
-- Agreed Phase 1 design: rows that fail validation go to a quarantine file with a reason, and the run fails only if rejects exceed a threshold (about 1%); `unknown` class becomes null with the original value kept; output is Parquet partitioned by time step in gitignored `data/processed/`; check that every edge `txId` exists in the features file.
-- Next: classes reader, edges reader, row-level validation with quarantine, partitioned Parquet output, cross-file integrity check, DuckDB queries, then a "break it and fix it" exercise (bad time step, running twice, edge to a missing txId, truncated file). Each piece is its own small commit, with the DECISIONS.md entry alongside.
+- Repo: github.com/peiris830/GraphGuard, `main` always passes tests. Tag `v0.1.0-foundation` (Phase 0) is pushed. Python 3.12.4 venv.
+- Phase 1 (local batch pipeline) is nearly done. Merged: validation rule (accepts NumPy numbers), three CSV readers, four cross-file integrity checks, row quarantine with a 1% threshold, partitioned Parquet writer with safe reruns, and the `python -m graphguard.pipeline` entry point (full real dataset in about 4 s, rerun-safe). 102 tests.
+- Real-data facts are in docs/data.md (no header on features, 157,205 `unknown` labels, 49 gap-free steps, no edge crosses a step, all integrity checks pass).
+- OPEN ITEMS (do not defer without writing them here):
+  1. DuckDB queries over data/processed/ to prove the output is usable (adds `duckdb`; one-sentence reason: query Parquet in place with SQL).
+  2. "Break it and fix it" exercise for Phase 1: bad time step, running twice, edge to a missing txId, truncated file, killed run.
+  3. Tag `v0.2.0-local-batch-pipeline` on main once items 1 and 2 are merged and tests pass (tags are pushed by name: `git push origin <tag>`).
+  4. README status table and this section updated when Phase 1 closes.
+- Docs branch `docs/readme-and-data-dictionary` adds README, docs/data.md, docs/architecture.md and LICENSE.
+- Next after Phase 1: Phase 2, PySpark (joins, in/out degree per time step); `run_pipeline` will need a per-step parameter before Airflow in Phase 4.
