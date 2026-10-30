@@ -46,6 +46,13 @@ One short entry per real decision: what was chosen and why.
 - **Update (2026-10-28):** Checked against the real files. Time steps are plain
   integers 1 to 49 with no gaps, so the rule fits the data as it stands. The float
   case is kept as protection, not because the current files need it.
+- **Update (2026-10-30):** NumPy numbers now count as numbers. Pipeline data arrives as
+  pandas columns, and `np.int64(7)` is not a Python `int`, so the first version rejected
+  valid steps when called on raw column values (it only worked through `Series.map`,
+  which converts to plain ints). The check now uses `numbers.Integral` and
+  `numbers.Real`, and returns a real `bool` because comparing NumPy numbers gives
+  `np.bool_`. Bools (including `np.bool_`), strings, NaN and inf are still rejected,
+  and ints too large for a float are rejected without raising.
 
 ### 2026-10-28: Use pandas for the Phase 1 CSV loading
 - **Decision:** The Phase 1 loader reads the Elliptic CSVs with pandas.
@@ -145,4 +152,5 @@ One short entry per real decision: what was chosen and why.
 - **Gotcha found while building it:** `is_valid_time_step` rejects NumPy integers
   (`np.int64` is not a Python `int`). `Series.map` passes plain ints, so the quarantine
   step is safe, but looping over the NumPy array would reject every row. A test guards
-  this, and hardening the validator is tracked as a separate change.
+  this. The validator was hardened to accept NumPy numbers in the same branch (see the
+  update on the time step entry).
