@@ -81,3 +81,13 @@ def test_duplicate_tx_ids_returns_every_copy():
 
 def test_duplicate_tx_ids_empty_when_unique():
     assert find_duplicate_tx_ids(classes(1, 2, 3)).empty
+
+
+def test_cross_step_check_does_not_crash_on_duplicate_tx_ids():
+    # Duplicates are reported by their own check; this one must still run.
+    # A duplicated id has no single time step, so edges touching it are skipped.
+    f = features((1, 5), (1, 6), (2, 5), (3, 6))
+
+    result = find_cross_step_edges(edges((1, 2), (2, 3)), f)
+
+    assert result.values.tolist() == [[2, 3]]
