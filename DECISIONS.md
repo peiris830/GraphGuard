@@ -180,3 +180,33 @@ One short entry per real decision: what was chosen and why.
   `.old-` folder: misplaced, not lost. Ordinary folders on Windows give no fully atomic
   option. Null or fractional time steps raise instead of being written, because pandas
   `groupby` would otherwise drop rows with null keys without any error.
+
+### 2026-10-31: One pipeline entry point that checks everything before it writes anything
+- **Decision:** `run_pipeline` reads the three files, runs all integrity checks, applies the
+  row-level quarantine, and only then writes. It runs from the command line with
+  `python -m graphguard.pipeline` and exits 0 on success, 1 with the reason on failure.
+  Integrity problems are collected and reported together, with counts and examples.
+  Classes and edges of a quarantined transaction are dropped and counted in the summary.
+  Edges are partitioned by the time step of their source transaction.
+- **Why:** A failed run must not leave a mix of old and new output, so every check that can
+  stop the run happens before the first write; the previous good output stays untouched.
+  Reporting all problems at once saves one fix-and-rerun cycle per problem. A class row or
+  edge belonging to a rejected transaction has no valid time step to partition by, so it
+  cannot be written, but it is counted so the loss is visible and not silent. Edges never
+  cross time steps in this data (the integrity check enforces it), so the source's step
+  is the edge's step. A plain exit code is what Airflow and Docker will read in later
+  phases, and the same function is what they will call.
+- **Alternatives considered:** Writing each table as soon as it is ready (simpler, but a
+  failure on the edges leaves new features beside old edges). Stopping at the first
+  integrity problem (less code, but hides the others). Writing the dropped classes and
+  edges to their own quarantine files (more complete, but more output to maintain for a
+  case that does not occur in the real data). A failure marker file (more state to
+  manage; Airflow will track run failures).
+- **Trade-off:** The checks hold all three tables in memory, which is fine at 200k rows
+  (3.7 s for the full run here) and is the reason Phase 2 moves heavy joins to Spark.
+  Dropped dependents are counted but not stored, so if that case ever happens in real
+  data, adding quarantine files for them is the next step.
+- **Bug found while building it:** The cross-step check crashed when the features file
+  held duplicate transaction ids, because the time step lookup needs unique ids. The
+  checks are meant to be independent so all problems report together; it now skips
+  duplicated ids and the duplicate check reports them.

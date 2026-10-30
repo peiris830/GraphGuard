@@ -21,7 +21,8 @@ def split_valid_rows(
     # array instead would pass np.int64, which the validator rejects.
     is_valid = features["time_step"].map(is_valid_time_step).astype(bool)
     clean = features[is_valid]
-    rejected = features[~is_valid].assign(reason="invalid_time_step")
+    # copy() consolidates the 167 column blocks; assign() on a fragmented frame warns.
+    rejected = features[~is_valid].copy().assign(reason="invalid_time_step")
 
     if len(features) and len(rejected) / len(features) > max_reject_rate:
         raise ValueError(
