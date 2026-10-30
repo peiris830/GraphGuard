@@ -154,3 +154,29 @@ One short entry per real decision: what was chosen and why.
   step is safe, but looping over the NumPy array would reject every row. A test guards
   this. The validator was hardened to accept NumPy numbers in the same branch (see the
   update on the time step entry).
+
+### 2026-10-30: Write Parquet partitioned by time step, replacing each step through a temp folder
+- **Decision:** Clean rows are written to `data/processed/features/time_step=N/part-0.parquet`,
+  one folder per step, with the time step in the folder name and not in the file. Each step
+  is written to a temporary folder and renamed into place, replacing any previous version
+  of that step. Rejected rows go to one quarantine Parquet file, which is written even
+  when empty. Adds `pyarrow`.
+- **Why:** Parquet keeps typed, compressed columns: the real features file drops from
+  690 MB of CSV to 102 MB, `Int64` nullable labels survive unchanged, and DuckDB and Spark
+  read it directly. One folder per step means a query about step 7 reads one folder, and
+  rerunning step 7 touches only that folder, which is what Airflow's "one run per time
+  step" will need. Writing to a temp folder first means a crash midway cannot leave a
+  half-written step that looks finished; readers see the old version or the new one.
+  Rerunning gives the same data, never doubled rows.
+- **Why an empty quarantine file:** An empty file says "checked, nothing rejected", while a
+  missing file could mean the check never ran.
+- **Alternatives considered:** One big Parquet file (simple, but every rerun rewrites
+  everything and queries cannot skip steps). Appending to existing folders (no deletion
+  needed, but a rerun duplicates rows). Writing straight into the final folder (less code,
+  but a crash leaves partial data). Letting pandas partition with `partition_cols` (fewer
+  lines, but no control over replacement or cleanup of failed writes).
+- **Trade-off:** The swap is not fully atomic. Between the two renames the step's folder
+  briefly does not exist, and a crash there leaves the previous version in a hidden
+  `.old-` folder: misplaced, not lost. Ordinary folders on Windows give no fully atomic
+  option. Null or fractional time steps raise instead of being written, because pandas
+  `groupby` would otherwise drop rows with null keys without any error.
