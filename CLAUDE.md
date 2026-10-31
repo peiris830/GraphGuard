@@ -84,12 +84,11 @@ Run the pipeline: `python -m graphguard.pipeline`. Run tests: `pytest`.
 
 ## Current status (update this at the end of each session)
 - Repo: github.com/peiris830/GraphGuard, `main` always passes tests. Tag `v0.1.0-foundation` (Phase 0) is pushed. Python 3.12.4 venv.
-- Phase 1 (local batch pipeline) is nearly done. Merged: validation rule (accepts NumPy numbers), three CSV readers, four cross-file integrity checks, row quarantine with a 1% threshold, partitioned Parquet writer with safe reruns, and the `python -m graphguard.pipeline` entry point (full real dataset in about 4 s, rerun-safe). 102 tests.
+- Phase 1 (local batch pipeline) is nearly done; only the failure drills and the tag remain. Merged: validation rule (accepts NumPy numbers), three CSV readers, four cross-file integrity checks, row quarantine with a 1% threshold, partitioned Parquet writer with safe reruns, the `python -m graphguard.pipeline` entry point (full real dataset in about 4 s, rerun-safe), and DuckDB queries in queries.py (step_summary, node_degrees; node_degrees is the baseline Spark must match in Phase 2). 109 tests.
 - Real-data facts are in docs/data.md (no header on features, 157,205 `unknown` labels, 49 gap-free steps, no edge crosses a step, all integrity checks pass).
 - OPEN ITEMS (do not defer without writing them here):
-  1. DuckDB queries over data/processed/ to prove the output is usable (adds `duckdb`; one-sentence reason: query Parquet in place with SQL).
-  2. "Break it and fix it" exercise for Phase 1: bad time step, running twice, edge to a missing txId, truncated file, killed run.
-  3. Tag `v0.2.0-local-batch-pipeline` on main once items 1 and 2 are merged and tests pass (tags are pushed by name: `git push origin <tag>`).
-  4. README status table and this section updated when Phase 1 closes.
+  1. "Break it and fix it" exercise for Phase 1: bad time step, running twice, edge to a missing txId, truncated file, killed run.
+  2. Tag `v0.2.0-local-batch-pipeline` on main once item 1 is merged and tests pass (tags are pushed by name: `git push origin <tag>`).
+  3. README status table and this section updated when Phase 1 closes.
 - Docs branch `docs/readme-and-data-dictionary` adds README, docs/data.md, docs/architecture.md and LICENSE.
 - Next after Phase 1: Phase 2, PySpark (joins, in/out degree per time step); `run_pipeline` will need a per-step parameter before Airflow in Phase 4.
