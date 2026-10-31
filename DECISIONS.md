@@ -181,7 +181,7 @@ One short entry per real decision: what was chosen and why.
   option. Null or fractional time steps raise instead of being written, because pandas
   `groupby` would otherwise drop rows with null keys without any error.
 
-### 2026-10-31: One pipeline entry point that checks everything before it writes anything
+### 2026-10-30: One pipeline entry point that checks everything before it writes anything
 - **Decision:** `run_pipeline` reads the three files, runs all integrity checks, applies the
   row-level quarantine, and only then writes. It runs from the command line with
   `python -m graphguard.pipeline` and exits 0 on success, 1 with the reason on failure.
@@ -210,3 +210,25 @@ One short entry per real decision: what was chosen and why.
   held duplicate transaction ids, because the time step lookup needs unique ids. The
   checks are meant to be independent so all problems report together; it now skips
   duplicated ids and the duplicate check reports them.
+
+### 2026-10-30: Query the Parquet output with DuckDB, and keep its degree counts as the Spark baseline
+- **Decision:** `queries.py` reads `data/processed/` in place with DuckDB (no copy, no server).
+  `step_summary` returns transactions, edges and label counts per time step across all three
+  tables; `node_degrees(step)` returns in-degree and out-degree for every transaction in one
+  step. Adds `duckdb`.
+- **Why:** The pipeline writes Parquet, so something has to prove the output is usable.
+  DuckDB runs inside Python, reads the `time_step=7/` folders natively, and answers in
+  milliseconds (0.07 s for the summary of the full dataset), so there is nothing to install or
+  operate. A query for one time step opened 1 file instead of 49, which is the reason for
+  partitioning, observed and not assumed. `node_degrees` is also the known-good answer for
+  Phase 2: the Spark job must reproduce it exactly, and a second tool agreeing is how a big-data
+  job is tested. Its step 7 result was checked against a plain pandas calculation.
+- **Why a left join for edges:** A step with no edges must show 0 and not vanish from the
+  summary, which would look like missing data.
+- **Alternatives considered:** pandas over the Parquet (works, but loads data into memory and
+  does not prune partitions the same way). SQLite (needs a load step and a copy of the data).
+  Waiting for Athena in Phase 3 (the same idea in the cloud, but too far away to prove the
+  local output is correct now).
+- **Trade-off:** DuckDB becomes a runtime dependency for what is, today, a verification tool.
+  It is also the likeliest tool for later steps (drift check, API), so the cost is shared.
+  Query results are returned as pandas DataFrames, which is fine at this size.

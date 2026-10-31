@@ -42,6 +42,7 @@ All code lives in `src/graphguard/`.
 | `quarantine.py` | split rows into clean and rejected, stop above the reject threshold | write anything |
 | `writer.py` | write partitioned Parquet and the quarantine file safely | decide which rows are good |
 | `pipeline.py` | run the steps in order, summarise, and provide the command line | contain rules of its own |
+| `queries.py` | read the Parquet back with DuckDB: per-step summary and in/out degree | change the output |
 
 Keeping decisions (checks, thresholds) apart from actions (reading, writing) is what keeps each module testable with a handful of hand-made rows, without the 690 MB file.
 
@@ -88,7 +89,7 @@ Edges take their source transaction's time step. That is safe because the integr
 
 | Phase | Builds on |
 |---|---|
-| 1 (finish) | DuckDB queries over `data/processed/`, to show the output is usable |
+| 1 | `queries.py` reads the output in place with DuckDB. A query for one time step opens one file instead of 49, and its degree counts are the baseline Spark must reproduce in Phase 2 |
 | 2: Spark | reads the Parquet; no edge crosses a time step, so degree counts can be computed one step at a time |
 | 3: AWS | the same layout, written to S3 and exposed through Athena; infrastructure defined in Terraform |
 | 4: Airflow | calls `run_pipeline`; because writes replace a whole step, one run per time step is safe to retry |
