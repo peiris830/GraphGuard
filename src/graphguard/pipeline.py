@@ -51,16 +51,17 @@ def run_pipeline(
 
     # Everything that can stop the run happens before the first write, so a
     # failed run leaves the previous good output untouched.
-    _check_integrity(features, classes, edges)
     clean, rejected = split_valid_rows(features, max_reject_rate)
+    _check_integrity(features, clean, classes, edges)
 
-    # Rows of the other two tables that belong to a quarantined transaction
-    # cannot be partitioned (their step is invalid), so they are dropped and
-    # counted. Edges never cross steps, so an edge takes its source's step.
+    # A quarantined transaction has no valid step, so its class row and every
+    # edge touching it (as source or destination) are dropped and counted.
+    # Edges never cross steps, so a kept edge takes its source's step.
     step_of = clean.set_index("tx_id")["time_step"]
     kept_classes = classes[classes["tx_id"].isin(step_of.index)]
     kept_classes = kept_classes.assign(time_step=kept_classes["tx_id"].map(step_of))
-    kept_edges = edges[edges["src_tx_id"].isin(step_of.index)]
+    both_ends_kept = edges["src_tx_id"].isin(step_of.index) & edges["dst_tx_id"].isin(step_of.index)
+    kept_edges = edges[both_ends_kept]
     kept_edges = kept_edges.assign(time_step=kept_edges["src_tx_id"].map(step_of))
 
     write_partitioned(clean, out_dir / "features")
@@ -80,15 +81,22 @@ def run_pipeline(
 
 
 def _check_integrity(
-    features: pd.DataFrame, classes: pd.DataFrame, edges: pd.DataFrame
+    features: pd.DataFrame,
+    clean: pd.DataFrame,
+    classes: pd.DataFrame,
+    edges: pd.DataFrame,
 ) -> None:
+    # Identity checks use every feature row, quarantined ones included: a
+    # transaction with a bad step still exists, so an edge to it is not an
+    # orphan. The step check uses clean rows only, because a quarantined row
+    # has no trustworthy step (edges to it are skipped there and dropped later).
     # (name, offending rows, columns worth showing as examples)
     checks = [
         ("duplicate tx_ids in features", find_duplicate_tx_ids(features), ["tx_id"]),
         ("duplicate tx_ids in classes", find_duplicate_tx_ids(classes), ["tx_id"]),
         ("unmatched class ids", find_unmatched_class_ids(classes, features), None),
         ("orphan edges", find_orphan_edges(edges, features), None),
-        ("cross-step edges", find_cross_step_edges(edges, features), None),
+        ("cross-step edges", find_cross_step_edges(edges, clean), None),
     ]
     problems = [
         f"{name}: {len(rows)} (e.g. "
