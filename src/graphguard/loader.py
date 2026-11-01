@@ -19,7 +19,15 @@ def read_features(path: Path) -> pd.DataFrame:
             f"expected {len(FEATURE_COLUMNS)} columns in {path}, "
             f"found {first_row.shape[1]}"
         )
-    return pd.read_csv(path, header=None, names=FEATURE_COLUMNS)
+    df = pd.read_csv(
+        path, header=None, names=FEATURE_COLUMNS, dtype={"time_step": str}
+    )
+    # One stray "abc" would otherwise turn the whole column into text and make
+    # every later comparison on it wrong. Unparseable values become NaN, which
+    # the quarantine step rejects as an invalid time step. Clean files still
+    # load as integers; the column only becomes float when something was bad.
+    df["time_step"] = pd.to_numeric(df["time_step"], errors="coerce")
+    return df
 
 
 CLASS_COLUMNS = ["tx_id", "class_raw"]
