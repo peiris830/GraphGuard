@@ -144,6 +144,48 @@ def test_rejected_feature_rows_are_quarantined_and_their_dependents_dropped(tmp_
     assert summary.classes_written == 2
 
 
+def test_a_connected_row_with_a_bad_step_is_quarantined_with_its_edges_on_both_sides(tmp_path):
+    # Found by the Phase 1 failure drill: almost every real transaction has
+    # edges, and the bad step used to trip the cross-step check before the
+    # quarantine could take the row.
+    raw = tmp_path / "raw"
+    out = tmp_path / "out"
+    write_raw(
+        raw,
+        features=[(1, 1), (2, 1), (3, 1), (4, 0)],  # tx 4 has an invalid step
+        classes=[(1, "1"), (2, "1"), (3, "1"), (4, "1")],
+        edges=[(1, 2), (3, 4), (4, 1)],  # one edge into tx 4, one out of it
+    )
+
+    summary = run_pipeline(raw, out, max_reject_rate=1.0)
+
+    quarantined = pd.read_parquet(out / "quarantine" / "features.parquet")
+    assert quarantined["tx_id"].tolist() == [4]
+    edges = read_part(out, "edges", 1)
+    assert edges[["src_tx_id", "dst_tx_id"]].values.tolist() == [[1, 2]]
+    assert summary.edges_written == 1
+    assert summary.edges_dropped == 2
+    assert summary.classes_dropped == 1
+
+
+def test_a_real_orphan_edge_still_stops_the_run_when_a_row_is_quarantined(tmp_path):
+    # Dropping the dependents of a quarantined row must not turn into
+    # silently dropping every edge whose end is missing.
+    raw = tmp_path / "raw"
+    out = tmp_path / "out"
+    write_raw(
+        raw,
+        features=[(1, 1), (2, 1), (3, 0)],
+        classes=[(1, "1"), (2, "1"), (3, "1")],
+        edges=[(1, 2), (1, 99)],  # 99 exists in no file
+    )
+
+    with pytest.raises(IntegrityError, match="orphan edges: 1"):
+        run_pipeline(raw, out, max_reject_rate=1.0)
+
+    assert not out.exists() or not any(out.iterdir())
+
+
 def test_too_many_rejected_rows_stop_the_run_and_write_nothing(tmp_path):
     raw = tmp_path / "raw"
     out = tmp_path / "out"
