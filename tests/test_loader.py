@@ -143,3 +143,16 @@ def test_edges_with_missing_ids_raise(tmp_path):
 
     with pytest.raises(ValueError, match="missing"):
         read_edges(csv)
+
+
+def test_one_unparseable_time_step_does_not_spoil_the_rest_of_the_column(tmp_path):
+    # Found by the Phase 1 failure drill: a single "abc" made pandas read the
+    # whole column as text, so every later comparison on it was wrong.
+    csv = tmp_path / "features.csv"
+    write_features_csv(csv, [make_row(1, 5), make_row(2, "abc"), make_row(3, 7)])
+
+    df = read_features(csv)
+
+    assert df["time_step"].isna().tolist() == [False, True, False]
+    assert df.loc[~df["time_step"].isna(), "time_step"].tolist() == [5, 7]
+    assert df["tx_id"].tolist() == [1, 2, 3]

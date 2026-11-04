@@ -228,3 +228,21 @@ def test_command_line_returns_one_and_explains_on_failure(tmp_path, capsys):
 
     assert code == 1
     assert "orphan edges" in capsys.readouterr().err
+
+
+def test_a_non_numeric_time_step_is_quarantined_not_reported_as_cross_step_edges(tmp_path):
+    raw = tmp_path / "raw"
+    out = tmp_path / "out"
+    write_raw(
+        raw,
+        features=[(1, 1), (2, 1), (3, "abc")],
+        classes=[(1, "1"), (2, "1"), (3, "1")],
+        edges=[(1, 2), (2, 3)],
+    )
+
+    summary = run_pipeline(raw, out, max_reject_rate=1.0)
+
+    quarantined = pd.read_parquet(out / "quarantine" / "features.parquet")
+    assert quarantined["tx_id"].tolist() == [3]
+    assert read_part(out, "edges", 1)[["src_tx_id", "dst_tx_id"]].values.tolist() == [[1, 2]]
+    assert summary.edges_dropped == 1
