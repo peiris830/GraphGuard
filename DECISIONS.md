@@ -232,3 +232,21 @@ One short entry per real decision: what was chosen and why.
 - **Trade-off:** DuckDB becomes a runtime dependency for what is, today, a verification tool.
   It is also the likeliest tool for later steps (drift check, API), so the cost is shared.
   Query results are returned as pandas DataFrames, which is fine at this size.
+
+### 2026-11-02: Quarantine a bad-step row and drop its edges, instead of failing the run
+- **Decision:** A transaction with an invalid time step is quarantined even if it has
+  edges. Its class row and every edge touching it, as source or destination, are dropped
+  and counted in the summary. Duplicate, unmatched-class and orphan-edge checks use all
+  feature rows; the cross-step check uses clean rows only.
+- **Why:** The Phase 1 failure drill showed the old order (integrity checks, then
+  quarantine) made quarantine unreachable for real data: one connected row with step 99
+  stopped the run with "cross-step edges", because almost every transaction has edges.
+  Splitting first sets a single bad row aside without losing the other 203k. Identity
+  checks still use every row, so an edge to an id that exists in no file is still an
+  error and is not silently dropped as a "dependent".
+- **Alternatives considered:** Fail the run on any bad step (safe, but one bad row blocks
+  everything and the quarantine is dead code). Drop only edges whose source is quarantined
+  (leaves a kept edge pointing at a missing transaction).
+- **Trade-off:** Neighbours of a quarantined row silently lose an edge. The summary counts
+  and the quarantine file are the only record; the 1% reject limit is the guard against
+  this hiding a larger upstream problem.
