@@ -31,10 +31,31 @@ def write_partitioned(
         raise ValueError(f"{partition_col!r} must hold whole numbers")
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    _sweep_leftovers(out_dir)
     for value, rows in df.groupby(partition_col, sort=True):
         _replace_partition(
             rows.drop(columns=partition_col), out_dir, f"{partition_col}={int(value)}"
         )
+
+
+def _sweep_leftovers(out_dir: Path) -> None:
+    """Clean up hidden folders that a killed write left behind.
+
+    A .tmp- folder is a half-written copy and is simply deleted. A .old- folder
+    is a previous version set aside during the swap: if its partition is
+    missing (the crash fell between the two renames) it is the only copy, so
+    it is put back; otherwise it is superseded and deleted. Assumes one writer
+    at a time; a second concurrent run would lose its own temp folders.
+    """
+    for tmp in out_dir.glob(".tmp-*"):
+        shutil.rmtree(tmp, ignore_errors=True)
+    for old in out_dir.glob(".old-*"):
+        # Name format is .old-<partition>-<32 hex chars>.
+        final = out_dir / old.name[len(".old-"):-33]
+        if final.exists():
+            shutil.rmtree(old, ignore_errors=True)
+        else:
+            old.rename(final)
 
 
 def _replace_partition(rows: pd.DataFrame, out_dir: Path, name: str) -> None:
@@ -67,6 +88,8 @@ def write_quarantine(rejected: pd.DataFrame, path: Path) -> None:
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    for leftover in path.parent.glob(f".{path.name}.tmp-*"):
+        leftover.unlink(missing_ok=True)
     tmp = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
     try:
         rejected.to_parquet(tmp, index=False)

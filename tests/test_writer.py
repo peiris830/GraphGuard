@@ -134,3 +134,51 @@ def test_quarantine_rerun_replaces_the_previous_file(tmp_path):
     write_quarantine(features([(2, 50, 0.5)]).assign(reason="b"), path)
 
     assert pd.read_parquet(path)["tx_id"].tolist() == [2]
+
+
+# A write killed mid-way leaves hidden .tmp-/.old- folders behind. The next
+# write cleans them up so they do not pile up (Phase 1 failure drill 5).
+TMP_NAME = ".tmp-time_step=7-" + "a" * 32
+OLD_NAME = ".old-time_step=1-" + "b" * 32
+
+
+def test_a_leftover_temp_folder_from_a_killed_write_is_removed(tmp_path):
+    (tmp_path / TMP_NAME).mkdir()
+    (tmp_path / TMP_NAME / "part-0.parquet").write_bytes(b"half written")
+
+    write_partitioned(features([(1, 1, 0.5)]), tmp_path)
+
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["time_step=1"]
+
+
+def test_a_previous_version_stranded_in_an_old_folder_is_restored(tmp_path):
+    # A crash between the two renames leaves the only copy in .old-, with no
+    # time_step=1 folder. Deleting it would lose data, so it goes back.
+    write_partitioned(features([(1, 1, 0.5)]), tmp_path)
+    (tmp_path / "time_step=1").rename(tmp_path / OLD_NAME)
+
+    write_partitioned(features([(2, 2, 0.6)]), tmp_path)
+
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["time_step=1", "time_step=2"]
+    assert read_step(tmp_path, 1)["tx_id"].tolist() == [1]
+
+
+def test_an_old_folder_is_deleted_when_its_partition_exists_again(tmp_path):
+    write_partitioned(features([(1, 1, 0.5)]), tmp_path)
+    (tmp_path / OLD_NAME).mkdir()
+    (tmp_path / OLD_NAME / "part-0.parquet").write_bytes(b"superseded")
+
+    write_partitioned(features([(2, 2, 0.6)]), tmp_path)
+
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["time_step=1", "time_step=2"]
+    assert read_step(tmp_path, 1)["tx_id"].tolist() == [1]
+
+
+def test_a_leftover_temp_file_next_to_the_quarantine_file_is_removed(tmp_path):
+    path = tmp_path / "quarantine" / "features.parquet"
+    path.parent.mkdir()
+    (path.parent / (".features.parquet.tmp-" + "c" * 32)).write_bytes(b"half written")
+
+    write_quarantine(features([(1, 0, 0.5)]).assign(reason="invalid_time_step"), path)
+
+    assert [p.name for p in path.parent.iterdir()] == ["features.parquet"]
