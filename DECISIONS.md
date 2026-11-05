@@ -250,3 +250,24 @@ One short entry per real decision: what was chosen and why.
 - **Trade-off:** Neighbours of a quarantined row silently lose an edge. The summary counts
   and the quarantine file are the only record; the 1% reject limit is the guard against
   this hiding a larger upstream problem.
+
+### 2026-11-05: Sweep leftover temp folders at the start of each write, restoring stranded originals
+- **Decision:** Before writing, the writer deletes hidden `.tmp-` folders left by a killed
+  run. A `.old-` folder is renamed back to its partition if that partition is missing, and
+  deleted only if the partition exists again. The quarantine file's temp files are removed
+  the same way.
+- **Why:** The Phase 1 kill drill (run stopped at several points, then rerun) showed that a
+  rerun always reproduces the correct data, but a kill mid-write left a `.tmp-` folder that
+  nothing removed, one more per interrupted run. They are hidden and DuckDB's
+  `time_step=*` pattern ignores them, so the cost was clutter, not wrong answers. The restore
+  rule exists because a crash between the two renames leaves the previous version only in
+  `.old-`; deleting it blindly is safe today (every run rewrites all 49 steps) but would lose
+  data once Phase 4 writes one step at a time.
+- **Alternatives considered:** Do nothing and document it (cheapest, but the clutter grows
+  without bound). Delete every `.old-` folder (simpler, but unsafe for per-step runs).
+- **Trade-off:** Assumes one writer at a time: two overlapping runs would delete each other's
+  temp folders, so Phase 4 must run one DAG per output at a time or add a lock.
+- **Deferred:** A killed run can still leave a partial output (e.g. 20 of 49 `features`
+  steps and no `classes` or `edges`), and nothing marks a run as complete. A `_SUCCESS`
+  marker written last and removed at the start of a run would fix that; it belongs with the
+  Airflow work in Phase 4.
