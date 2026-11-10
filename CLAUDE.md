@@ -29,6 +29,13 @@ The owner is a CS graduate, a beginner in data engineering and AWS, working on W
 - The owner approves every commit and every push. Claude never runs `git commit` or `git push` on its own: it proposes the files to stage and the commit message, and the owner approves (or runs the command personally). As tutor, explain what each git command does, since the owner is learning good habits.
 - No `Co-Authored-By` or "Generated with Claude" trailers in commit messages or PR descriptions. The owner is the sole author in the history.
 - Never rewrite published history (no force-push on `main`).
+- Pull request descriptions follow the style of PR #8:
+  - Title: the commit subject, imperative, no prefix needed (e.g. "Query the Parquet output with DuckDB").
+  - Opening line: one plain sentence saying what the PR proves or fixes.
+  - Bullets: concrete behaviour and numbers (timings, counts, what was observed), not vague claims. For a fix, say how it was found and what the old behaviour was.
+  - Closing line: what else was touched (README, architecture doc, DECISIONS.md), any new dependency, and the test count.
+  - No "Generated with" or other attribution trailer.
+- The merge commit (GitHub "Create a merge commit") keeps the default `Merge pull request #N from peiris830/<branch>` subject, followed by a short body of about five lines summarising the PR.
 
 ## Roadmap
 | # | Project | Covers |
