@@ -74,7 +74,7 @@ data/processed/
 | Phase | What | State |
 |---|---|---|
 | 0 | Repo skeleton, tests, first validation rule | Done (`v0.1.0-foundation`) |
-| 1 | Local batch pipeline: load, validate, write Parquet, query with DuckDB | In progress: loading, checks, quarantine, Parquet output and DuckDB queries done; failure drills left |
+| 1 | Local batch pipeline: load, validate, write Parquet, query with DuckDB | Done (`v0.2.0-local-batch-pipeline`): failure drills run, three bugs found and fixed |
 | 2 | PySpark: joins, in/out degree per time step | Planned |
 | 3 | AWS with Terraform: S3, IAM, Athena | Planned |
 | 4 | Airflow: one idempotent run per time step | Planned |

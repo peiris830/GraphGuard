@@ -56,9 +56,9 @@ Keeping decisions (checks, thresholds) apart from actions (reading, writing) is 
 | An edge connects two different time steps | `IntegrityError`; nothing written |
 | A transaction appears twice | `IntegrityError`; nothing written |
 | Class ids and feature ids do not match | `IntegrityError`; nothing written |
-| A few rows have an invalid time step (up to 1%) | rows go to the quarantine file with a reason; the run continues |
+| A few rows have an invalid time step or a non-numeric one such as `abc` (up to 1%) | rows go to the quarantine file with a reason; their class row and every edge touching them are dropped and counted; the run continues |
 | More than 1% of rows are invalid | `ValueError`; nothing written, because that usually means something upstream broke |
-| The process dies while writing a step | the step is written to a temporary folder and renamed into place, so readers see the old or the new version, never half of one |
+| The process dies while writing a step | the step is written to a temporary folder and renamed into place, so readers see the old or the new version, never half of one; the next run sweeps the leftover temp folders |
 | The pipeline is run twice | each step is replaced, not appended, so the result is identical and rows are never doubled |
 
 All integrity problems are reported together, with counts and examples, so one rerun can fix several.
@@ -101,4 +101,5 @@ Edges take their source transaction's time step. That is safe because the integr
 - `run_pipeline` processes every time step in one call. Airflow's one-run-per-step design will need a step parameter.
 - The checks hold all three tables in memory. That is fine at this size (about 4 seconds for the full run) and is the reason heavy joins move to Spark in Phase 2.
 - Rows of the classes and edges tables that belong to a quarantined transaction are dropped and counted, but not stored. This never happens in the real data.
+- A run killed mid-write can leave a partial output (for example some `features` steps and no `edges`), and nothing marks a run as complete. A `_SUCCESS` marker is planned for Phase 4. Only one writer at a time is supported.
 - The directory swap is not fully atomic: a crash between its two renames leaves the previous version in a hidden `.old-` folder, misplaced but not lost. See [DECISIONS.md](../DECISIONS.md).
